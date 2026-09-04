@@ -156,6 +156,28 @@ def test_decide_choice_respects_priority_order():
     assert daemon.decide_choice(monitors, order) == "ARCTIS"
 
 
+def test_decide_choice_skips_disabled_device_even_if_ready():
+    monitors = {
+        "WF1000XM5": FakeMonitor(True),
+        "CETRA": FakeMonitor(True),
+    }
+    enabled = {"WF1000XM5": False, "CETRA": True}
+    assert daemon.decide_choice(monitors, ["WF1000XM5", "CETRA"], enabled) == "CETRA"
+
+
+def test_decide_choice_device_missing_from_enabled_map_defaults_enabled():
+    # A device added to config.yml but never touched in the panel yet
+    # should still work, not be silently excluded.
+    monitors = {"WF1000XM5": FakeMonitor(True)}
+    assert daemon.decide_choice(monitors, ["WF1000XM5"], enabled_devices={}) == "WF1000XM5"
+
+
+def test_decide_choice_all_disabled_returns_none():
+    monitors = {"WF1000XM5": FakeMonitor(True)}
+    enabled = {"WF1000XM5": False}
+    assert daemon.decide_choice(monitors, ["WF1000XM5"], enabled) is None
+
+
 def test_apply_choice_device_sets_sink_and_source():
     sinks = FakeSinkManager()
     ok = daemon.apply_choice(sinks, "ARCTIS", CFG)
@@ -221,7 +243,8 @@ def test_build_status_includes_battery_when_monitor_supports_it():
         "battery": {"left": 100, "right": 100, "case": 71},
     }
     assert status["devices"]["ARCTIS"] == {"connected": False, "battery": None}
-    # Monitor with no get_battery() at all (e.g. XM5Monitor) reports battery: None
+    # Monitor with no get_battery() at all (e.g. PipewirePresenceMonitor)
+    # reports battery: None
     assert status["devices"]["WF1000XM5"] == {"connected": False, "battery": None}
 
 
@@ -239,23 +262,6 @@ def test_build_status_fallback_enabled_defaults_true():
 def test_build_status_reports_fallback_disabled():
     status = daemon.build_status({}, None, fallback_enabled=False)
     assert status["fallback_enabled"] is False
-
-
-def test_read_settings_defaults_when_missing(tmp_path):
-    path = tmp_path / "does-not-exist.json"
-    assert daemon.read_settings(path=str(path)) == {"fallback_enabled": True}
-
-
-def test_read_settings_reads_disabled_value(tmp_path):
-    path = tmp_path / "settings.json"
-    path.write_text(json.dumps({"fallback_enabled": False}))
-    assert daemon.read_settings(path=str(path)) == {"fallback_enabled": False}
-
-
-def test_read_settings_defaults_on_malformed_json(tmp_path):
-    path = tmp_path / "settings.json"
-    path.write_text("not json")
-    assert daemon.read_settings(path=str(path)) == {"fallback_enabled": True}
 
 
 def test_write_status_file_writes_valid_json(tmp_path):

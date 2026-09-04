@@ -6,9 +6,10 @@ import yaml
 
 from .monitors import MONITOR_TYPES
 from .sink_manager import SinkManager
+from . import settings as settings_module
 
 STATUS_PATH = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "headset-status.json")
-SETTINGS_PATH = os.path.expanduser("~/.config/audio-priority-daemon/settings.json")
+PLUGIN_ID = "hedgemonkey.soundmonkey"
 
 
 def build_monitors(cfg):
@@ -42,9 +43,19 @@ def build_monitors(cfg):
     return monitors
 
 
-def decide_choice(monitors, priority_order):
-    """Return the highest-priority device whose monitor reports ready, or None."""
+def decide_choice(monitors, priority_order, enabled_devices=None):
+    """Return the highest-priority enabled device whose monitor reports
+    ready, or None.
+
+    enabled_devices: optional {name: bool} (from resolved user settings). A
+    device missing from this mapping is treated as enabled, so a device
+    added to config.yml but never touched in the panel still works. None
+    (the default) means every device in priority_order is considered, for
+    callers that don't have settings to apply.
+    """
     for name in priority_order:
+        if enabled_devices is not None and not enabled_devices.get(name, True):
+            continue
         monitor = monitors.get(name)
         if monitor is not None and monitor.is_audio_ready():
             return name
@@ -66,20 +77,6 @@ def build_status(monitors, choice, fallback_enabled=True):
         "fallback_enabled": fallback_enabled,
         "devices": devices,
     }
-
-
-def read_settings(path=SETTINGS_PATH):
-    """Read user-toggleable runtime settings, written by the bar widget.
-
-    Defaults to fallback_enabled=True (current behaviour) when the file is
-    missing or unreadable, so a fresh install behaves exactly as before.
-    """
-    try:
-        with open(path) as f:
-            data = json.load(f)
-        return {"fallback_enabled": bool(data.get("fallback_enabled", True))}
-    except (OSError, ValueError):
-        return {"fallback_enabled": True}
 
 
 def write_status_file(status, path=STATUS_PATH):
@@ -144,7 +141,6 @@ def main():
 
     devices = cfg.get("devices", {})
     monitors = build_monitors(cfg)
-    priority_order = cfg.get("priority_order", list(devices.keys()))
     reassert_interval = cfg.get("reassert_interval_s", 30.0)
 
     for m in monitors.values():
@@ -161,9 +157,14 @@ def main():
 
     try:
         while True:
-            choice = decide_choice(monitors, priority_order)
-            settings = read_settings()
-            fallback_enabled = settings["fallback_enabled"]
+            # Re-resolved every poll so panel edits (reorder, enable/disable,
+            # fallback toggle) take effect without a daemon restart.
+            resolved = settings_module.resolve_settings(PLUGIN_ID, cfg)
+            priority_order = resolved["priorityOrder"]
+            enabled_devices = resolved["enabledDevices"]
+            fallback_enabled = resolved["fallbackEnabled"]
+
+            choice = decide_choice(monitors, priority_order, enabled_devices)
             now = time.time()
             # Apply when the choice changes, or periodically to re-assert in
             # case an external component (e.g. WirePlumber) moved the default.
