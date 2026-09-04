@@ -49,6 +49,12 @@ priority_order:
   # daemon hasn't yet observed a fresh power-off event (e.g. right after a
   # restart while already docked), which ARCTIS's headsetcontrol-based check
   # doesn't need to worry about.
+  #
+  # Note: the currently active device is not preempted by a higher-priority
+  # one that becomes ready later (see decide_choice()'s current_choice
+  # handling) - it only loses out once it stops being ready itself. Putting
+  # on a higher-priority headset while a lower-priority one is still worn
+  # won't switch until the lower-priority one comes off.
 
 fallback:
   mode: "system"

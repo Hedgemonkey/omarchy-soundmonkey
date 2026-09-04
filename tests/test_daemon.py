@@ -178,6 +178,54 @@ def test_decide_choice_all_disabled_returns_none():
     assert daemon.decide_choice(monitors, ["WF1000XM5"], enabled) is None
 
 
+def test_decide_choice_sticks_with_current_over_a_higher_priority_newcomer():
+    # CETRA is active and still ready; ARCTIS (higher priority) just became
+    # ready too. Should NOT preempt CETRA - avoids live-switching a device
+    # that's still in active use (e.g. mid Discord call).
+    monitors = {
+        "ARCTIS": FakeMonitor(True),
+        "CETRA": FakeMonitor(True),
+    }
+    order = ["ARCTIS", "CETRA"]
+    assert daemon.decide_choice(monitors, order, current_choice="CETRA") == "CETRA"
+
+
+def test_decide_choice_falls_over_once_current_stops_being_ready():
+    monitors = {
+        "ARCTIS": FakeMonitor(True),
+        "CETRA": FakeMonitor(False),  # current, but no longer ready
+    }
+    order = ["ARCTIS", "CETRA"]
+    assert daemon.decide_choice(monitors, order, current_choice="CETRA") == "ARCTIS"
+
+
+def test_decide_choice_falls_over_once_current_becomes_disabled():
+    monitors = {
+        "ARCTIS": FakeMonitor(True),
+        "CETRA": FakeMonitor(True),
+    }
+    order = ["ARCTIS", "CETRA"]
+    enabled = {"CETRA": False}
+    assert daemon.decide_choice(monitors, order, enabled, current_choice="CETRA") == "ARCTIS"
+
+
+def test_decide_choice_current_choice_none_behaves_as_before():
+    # No current device (e.g. daemon just started) -> plain highest-priority
+    # selection, matching every pre-existing test above.
+    monitors = {"ARCTIS": FakeMonitor(True), "CETRA": FakeMonitor(True)}
+    order = ["ARCTIS", "CETRA"]
+    assert daemon.decide_choice(monitors, order, current_choice=None) == "ARCTIS"
+
+
+def test_decide_choice_current_choice_unknown_to_monitors_is_ignored():
+    # current_choice referencing a device with no monitor (e.g. removed from
+    # config) shouldn't crash or wrongly "stick" - falls through to normal
+    # selection.
+    monitors = {"ARCTIS": FakeMonitor(True)}
+    order = ["ARCTIS"]
+    assert daemon.decide_choice(monitors, order, current_choice="REMOVED_DEVICE") == "ARCTIS"
+
+
 def test_apply_choice_device_sets_sink_and_source():
     sinks = FakeSinkManager()
     ok = daemon.apply_choice(sinks, "ARCTIS", CFG)

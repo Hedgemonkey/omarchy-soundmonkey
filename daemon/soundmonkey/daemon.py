@@ -44,7 +44,7 @@ def build_monitors(cfg):
     return monitors
 
 
-def decide_choice(monitors, priority_order, enabled_devices=None):
+def decide_choice(monitors, priority_order, enabled_devices=None, current_choice=None):
     """Return the highest-priority enabled device whose monitor reports
     ready, or None.
 
@@ -53,7 +53,27 @@ def decide_choice(monitors, priority_order, enabled_devices=None):
     added to config.yml but never touched in the panel still works. None
     (the default) means every device in priority_order is considered, for
     callers that don't have settings to apply.
+
+    current_choice: the device currently active, if any. As long as it's
+    still enabled and ready, it's kept even if a higher-priority device has
+    since also become ready - live-switching a still-working device out
+    from under an in-progress use (e.g. a Discord voice call) has reliably
+    crashed Discord's WebRTC audio thread, and there's no upside to
+    preempting a device that's working fine. Only once current_choice stops
+    being ready (or becomes disabled) does normal highest-priority
+    selection resume - so putting on a higher-priority headset while a
+    lower-priority one is still worn won't switch until the lower-priority
+    one is taken off, at which point the higher-priority one wins as usual.
+    This does not protect a forced failover (the active device genuinely
+    disconnecting) from the same crash risk - that switch still has to
+    happen; it just removes the *avoidable* switches.
     """
+    if current_choice is not None:
+        current_enabled = enabled_devices is None or enabled_devices.get(current_choice, True)
+        current_monitor = monitors.get(current_choice)
+        if current_enabled and current_monitor is not None and current_monitor.is_audio_ready():
+            return current_choice
+
     for name in priority_order:
         if enabled_devices is not None and not enabled_devices.get(name, True):
             continue
@@ -217,7 +237,8 @@ def main():
             fallback_enabled = resolved["fallbackEnabled"]
 
             now = time.time()
-            raw_choice = decide_choice(monitors, priority_order, enabled_devices)
+            raw_choice = decide_choice(monitors, priority_order, enabled_devices,
+                                        current_choice=last_choice)
             choice = debouncer.update(raw_choice, now)
             # Apply when the choice changes, or periodically to re-assert in
             # case an external component (e.g. WirePlumber) moved the default.
