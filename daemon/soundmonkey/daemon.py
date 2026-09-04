@@ -9,6 +9,7 @@ from .sink_manager import SinkManager
 from . import settings as settings_module
 
 STATUS_PATH = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "soundmonkey-status.json")
+CONFIG_PATH = os.path.expanduser("~/.config/soundmonkey/config.yml")
 PLUGIN_ID = "hedgemonkey.soundmonkey"
 
 
@@ -146,7 +147,7 @@ def apply_choice(sinks, choice, cfg, fallback_enabled=True):
 
 
 def main():
-    with open("config.yml") as f:
+    with open(CONFIG_PATH) as f:
         cfg = yaml.safe_load(f)
 
     logging.basicConfig(

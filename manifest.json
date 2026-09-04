@@ -7,10 +7,12 @@
   "license": "MIT",
   "description": "Priority-based automatic audio device switching, driven by live headset/earbud presence.",
   "kinds": [
-    "bar-widget"
+    "bar-widget",
+    "service"
   ],
   "entryPoints": {
-    "barWidget": "BarWidget.qml"
+    "barWidget": "BarWidget.qml",
+    "service": "Service.qml"
   },
   "barWidget": {
     "displayName": "SoundMonkey",

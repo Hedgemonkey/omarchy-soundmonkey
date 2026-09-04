@@ -1,0 +1,12 @@
+[Unit]
+Description=SoundMonkey headset/mic priority daemon
+After=pipewire.service wireplumber.service
+
+[Service]
+Type=simple
+ExecStart=%h/.config/omarchy/plugins/hedgemonkey.soundmonkey/daemon/.venv/bin/python -m soundmonkey
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target
