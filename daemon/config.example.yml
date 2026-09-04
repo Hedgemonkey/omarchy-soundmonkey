@@ -1,0 +1,32 @@
+devices:
+  WF1000XM5:
+    sink_match: "WF-1000XM5"
+    source_match: "bluez_input.AC:80:0A:29:4D:FE"
+  CETRA:
+    sink_match: "ROG CETRA TRUE WIRELESS SPEEDNOVA Analog Stereo"
+    source_match: "ROG CETRA TRUE WIRELESS SPEEDNOVA Mono"
+  ARCTIS:
+    sink_match: "Arctis Pro Wireless Analog Stereo"
+    source_match: "Arctis Pro Wireless Mono"
+    # matched against the headsetcontrol device name (not the PipeWire sink)
+    monitor_match: "Arctis Pro Wireless"
+
+priority_order:
+  - WF1000XM5
+  - CETRA
+  - ARCTIS
+  # WF1000XM5 first: Bluetooth pairing state is inherently on/off, the most
+  # reliable signal of the three. CETRA now tracks its own session on/off
+  # state (see cetra_monitor.py) rather than just "dongle plugged in", so it
+  # can safely sit above ARCTIS again - it only defaults to "ready" when the
+  # daemon hasn't yet observed a fresh power-off event (e.g. right after a
+  # restart while already docked), which ARCTIS's headsetcontrol-based check
+  # doesn't need to worry about.
+
+fallback:
+  mode: "system"
+
+poll_interval_ms: 1000
+cetra_timeout_ms: 5000
+reassert_interval_s: 30
+log_level: "INFO"
