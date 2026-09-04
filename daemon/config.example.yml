@@ -1,4 +1,6 @@
 # Each device declares:
+#   name:     display label shown in the bar widget/panel (defaults to the
+#     device key itself if omitted)
 #   type:     a key in soundmonkey.monitors.MONITOR_TYPES
 #   monitor:  kwargs passed straight to that monitor class's constructor
 #   sink_match / source_match: substrings matched against PipeWire sink /
@@ -12,6 +14,7 @@
 # monitor type entirely.
 devices:
   WF1000XM5:
+    name: "Sony WF-1000XM5"
     type: pipewire-presence
     sink_match: "WF-1000XM5"
     source_match: "bluez_input.AC:80:0A:29:4D:FE"
@@ -19,6 +22,7 @@ devices:
       description_match: "WF-1000XM5"
 
   CETRA:
+    name: "ROG Cetra"
     type: cetra-hid
     sink_match: "ROG CETRA TRUE WIRELESS SPEEDNOVA Analog Stereo"
     source_match: "ROG CETRA TRUE WIRELESS SPEEDNOVA Mono"
@@ -26,6 +30,7 @@ devices:
       description_match: "ROG CETRA TRUE WIRELESS SPEEDNOVA"
 
   ARCTIS:
+    name: "Arctis Pro Wireless"
     type: headsetcontrol
     sink_match: "Arctis Pro Wireless Analog Stereo"
     source_match: "Arctis Pro Wireless Mono"

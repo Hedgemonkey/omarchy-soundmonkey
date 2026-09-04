@@ -8,7 +8,7 @@ from .monitors import MONITOR_TYPES
 from .sink_manager import SinkManager
 from . import settings as settings_module
 
-STATUS_PATH = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "headset-status.json")
+STATUS_PATH = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "soundmonkey-status.json")
 PLUGIN_ID = "hedgemonkey.soundmonkey"
 
 
@@ -62,19 +62,34 @@ def decide_choice(monitors, priority_order, enabled_devices=None):
     return None
 
 
-def build_status(monitors, choice, fallback_enabled=True):
-    """Build the JSON-serialisable status dict written for the bar widget."""
+def build_status(monitors, choice, cfg=None, priority_order=None, fallback_enabled=True):
+    """Build the JSON-serialisable status dict written for the bar widget.
+
+    Carries each device's display label (from config.yml's `name:`, falling
+    back to the device key) and the resolved priority_order, so the QML side
+    can render the device list - order, labels, everything - purely from
+    this payload instead of keeping its own hardcoded copy of the device
+    list (the last of the original SSoT violations: labels and order used
+    to live only in BarWidget.qml/Panel.qml, independently of config.yml).
+
+    cfg/priority_order default to None so existing callers (and tests) that
+    only care about connected/battery state don't need to pass them.
+    """
+    cfg = cfg or {}
+    device_cfgs = cfg.get("devices", {})
     devices = {}
     for name, monitor in monitors.items():
         battery = monitor.get_battery() if hasattr(monitor, "get_battery") else None
         devices[name] = {
             "connected": monitor.is_audio_ready(),
             "battery": battery,
+            "label": device_cfgs.get(name, {}).get("name", name),
         }
     return {
         "updated": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "active": choice,
         "fallback_enabled": fallback_enabled,
+        "priority_order": priority_order or list(monitors.keys()),
         "devices": devices,
     }
 
@@ -184,7 +199,10 @@ def main():
                 last_choice = choice
                 last_apply = now
 
-            status = build_status(monitors, choice, fallback_enabled=fallback_enabled)
+            status = build_status(
+                monitors, choice, cfg=cfg, priority_order=priority_order,
+                fallback_enabled=fallback_enabled,
+            )
             # Write on any state change, and also periodically as a heartbeat
             # so a reader can tell "nothing changed" apart from "daemon died"
             # by checking the file's mtime.

@@ -236,16 +236,42 @@ def test_build_status_includes_battery_when_monitor_supports_it():
         "CETRA": FakeMonitorWithBattery(True, battery={"left": 100, "right": 100, "case": 71}),
         "ARCTIS": FakeMonitorWithBattery(False, battery=None),
     }
-    status = daemon.build_status(monitors, "CETRA")
+    status = daemon.build_status(monitors, "CETRA", cfg=CFG)
     assert status["active"] == "CETRA"
     assert status["devices"]["CETRA"] == {
         "connected": True,
         "battery": {"left": 100, "right": 100, "case": 71},
+        "label": "CETRA",
     }
-    assert status["devices"]["ARCTIS"] == {"connected": False, "battery": None}
+    assert status["devices"]["ARCTIS"] == {"connected": False, "battery": None, "label": "ARCTIS"}
     # Monitor with no get_battery() at all (e.g. PipewirePresenceMonitor)
     # reports battery: None
-    assert status["devices"]["WF1000XM5"] == {"connected": False, "battery": None}
+    assert status["devices"]["WF1000XM5"] == {"connected": False, "battery": None, "label": "WF1000XM5"}
+
+
+def test_build_status_uses_configured_display_name_as_label():
+    monitors = {"CETRA": FakeMonitorWithBattery(True, battery=None)}
+    cfg = {"devices": {"CETRA": {"name": "ROG Cetra"}}}
+    status = daemon.build_status(monitors, "CETRA", cfg=cfg)
+    assert status["devices"]["CETRA"]["label"] == "ROG Cetra"
+
+
+def test_build_status_label_defaults_to_device_key_without_cfg():
+    monitors = {"CETRA": FakeMonitorWithBattery(True, battery=None)}
+    status = daemon.build_status(monitors, "CETRA")
+    assert status["devices"]["CETRA"]["label"] == "CETRA"
+
+
+def test_build_status_includes_priority_order():
+    monitors = {"CETRA": FakeMonitor(True), "ARCTIS": FakeMonitor(False)}
+    status = daemon.build_status(monitors, "CETRA", priority_order=["ARCTIS", "CETRA"])
+    assert status["priority_order"] == ["ARCTIS", "CETRA"]
+
+
+def test_build_status_priority_order_defaults_to_monitor_keys_without_one():
+    monitors = {"CETRA": FakeMonitor(True)}
+    status = daemon.build_status(monitors, "CETRA")
+    assert status["priority_order"] == ["CETRA"]
 
 
 def test_build_status_active_none_when_nothing_ready():

@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+set -u
+
+export PATH=/usr/bin:/usr/local/bin
+
+readonly STATUS_PATH="${XDG_RUNTIME_DIR:-/tmp}/soundmonkey-status.json"
+readonly MAX_AGE_SECONDS=25
+
+show_status() {
+  if [[ ! -f "$STATUS_PATH" ]]; then
+    printf '{"active":null,"devices":{},"priority_order":[],"error":"daemon not running"}\n'
+    return
+  fi
+
+  local mtime now age
+  mtime="$(stat -c %Y "$STATUS_PATH" 2>/dev/null || echo 0)"
+  now="$(date +%s)"
+  age=$((now - mtime))
+
+  if (( age > MAX_AGE_SECONDS )); then
+    printf '{"active":null,"devices":{},"priority_order":[],"error":"daemon stalled"}\n'
+    return
+  fi
+
+  cat "$STATUS_PATH"
+  printf '\n'
+}
+
+case "${1:-status}" in
+  status)
+    show_status
+    ;;
+  *)
+    exit 2
+    ;;
+esac
