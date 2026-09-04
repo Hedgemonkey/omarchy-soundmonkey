@@ -79,6 +79,9 @@ def test_set_default_source_by_description_substr(monkeypatch):
     assert calls == [["wpctl", "set-default", "102"]]
 
 
+_TEST_HEADSET_SUBSTRINGS = ["Arctis", "ROG CETRA", "WF-1000XM5"]
+
+
 def test_set_internal_auto_skips_headsets(monkeypatch):
     _patch_pw_dump(monkeypatch, [
         make_pw_node(90, "Audio/Sink", "USB Audio Analog Stereo"),
@@ -87,7 +90,7 @@ def test_set_internal_auto_skips_headsets(monkeypatch):
         make_pw_node(98, "Audio/Sink", "GB203 High Definition Audio Controller Digital Stereo (HDMI)"),
     ])
     calls = _patch_wpctl(monkeypatch)
-    ok = SinkManager().set_internal_auto()
+    ok = SinkManager(headset_sink_substrings=_TEST_HEADSET_SUBSTRINGS).set_internal_auto()
     assert ok is True
     # Should pick the non-HDMI analog stereo sink, not a headset.
     assert calls == [["wpctl", "set-default", "90"]]
@@ -98,9 +101,34 @@ def test_set_internal_auto_only_headsets_returns_false(monkeypatch):
         make_pw_node(101, "Audio/Sink", "Arctis Pro Wireless Analog Stereo"),
     ])
     calls = _patch_wpctl(monkeypatch)
-    ok = SinkManager().set_internal_auto()
+    ok = SinkManager(headset_sink_substrings=_TEST_HEADSET_SUBSTRINGS).set_internal_auto()
     assert ok is False
     assert calls == []
+
+
+def test_set_internal_auto_headset_list_is_config_driven(monkeypatch):
+    # Not hardcoded: a sink name unrelated to any of the "big three" is
+    # correctly skipped as a headset purely because it's in the substring
+    # list passed in - and conversely treated as a normal output when it's
+    # not, with no code change either way.
+    _patch_pw_dump(monkeypatch, [
+        make_pw_node(90, "Audio/Sink", "USB Audio Analog Stereo"),
+        make_pw_node(77, "Audio/Sink", "Corsair Void Pro Wireless Analog Stereo"),
+    ])
+    calls = _patch_wpctl(monkeypatch)
+    ok = SinkManager(headset_sink_substrings=["Corsair Void"]).set_internal_auto()
+    assert ok is True
+    assert calls == [["wpctl", "set-default", "90"]]
+
+
+def test_set_internal_auto_with_no_headset_substrings_treats_everything_as_internal(monkeypatch):
+    _patch_pw_dump(monkeypatch, [
+        make_pw_node(101, "Audio/Sink", "Arctis Pro Wireless Analog Stereo"),
+    ])
+    calls = _patch_wpctl(monkeypatch)
+    ok = SinkManager().set_internal_auto()
+    assert ok is True
+    assert calls == [["wpctl", "set-default", "101"]]
 
 
 def test_set_internal_match(monkeypatch):

@@ -4,9 +4,15 @@ import logging
 
 
 class SinkManager:
-    def __init__(self):
+    def __init__(self, headset_sink_substrings=()):
+        """headset_sink_substrings: substrings (typically each configured
+        device's sink_match) identifying a sink as belonging to a priority
+        headset, so set_internal_auto() knows to skip it and pick a real
+        "internal" output instead. Driven by config rather than a hardcoded
+        device list, so adding a device needs no change here."""
         self.last_sink = None
         self.last_source = None
+        self._headset_sink_substrings = tuple(s for s in headset_sink_substrings if s)
 
     def _get_nodes(self, media_class):
         out = subprocess.check_output(["pw-dump"], stderr=subprocess.DEVNULL, timeout=5.0)
@@ -55,7 +61,7 @@ class SinkManager:
 
         def is_headset(desc):
             d = desc or ""
-            return ("Arctis" in d) or ("ROG CETRA" in d) or ("WF-1000XM5" in d)
+            return any(substr in d for substr in self._headset_sink_substrings)
 
         non_headset = {d: i for d, i in sinks.items() if not is_headset(d)}
         if not non_headset:

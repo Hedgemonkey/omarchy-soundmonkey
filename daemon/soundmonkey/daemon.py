@@ -142,14 +142,16 @@ def main():
         format="%(asctime)s [%(levelname)s] %(message)s",
     )
 
+    devices = cfg.get("devices", {})
     monitors = build_monitors(cfg)
-    priority_order = cfg.get("priority_order", ["WF1000XM5", "CETRA", "ARCTIS"])
+    priority_order = cfg.get("priority_order", list(devices.keys()))
     reassert_interval = cfg.get("reassert_interval_s", 30.0)
 
     for m in monitors.values():
         m.start()
 
-    sinks = SinkManager()
+    headset_sink_substrings = [d.get("sink_match") for d in devices.values()]
+    sinks = SinkManager(headset_sink_substrings=headset_sink_substrings)
     last_choice = None
     last_apply = 0.0
     last_status = None
