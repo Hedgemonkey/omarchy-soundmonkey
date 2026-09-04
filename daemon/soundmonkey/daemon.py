@@ -5,7 +5,7 @@ import json
 import yaml
 
 from .monitors.cetra_monitor import CetraMonitor
-from .monitors.xm5_monitor import XM5Monitor
+from .monitors.pipewire import PipewirePresenceMonitor
 from .monitors.arctis_monitor import ArctisMonitor
 from .sink_manager import SinkManager
 
@@ -25,7 +25,7 @@ def build_monitors(cfg):
 
     if "WF1000XM5" in devices:
         match = devices["WF1000XM5"].get("sink_match", "WF-1000XM5")
-        monitors["WF1000XM5"] = XM5Monitor(description_match=match)
+        monitors["WF1000XM5"] = PipewirePresenceMonitor(description_match=match)
 
     if "CETRA" in devices:
         match = devices["CETRA"].get("sink_match", "ROG CETRA TRUE WIRELESS SPEEDNOVA")

@@ -1,0 +1,18 @@
+from soundmonkey.monitors import DeviceMonitor, MONITOR_TYPES
+from soundmonkey.monitors.pipewire import PipewirePresenceMonitor
+
+
+def test_pipewire_presence_registered():
+    assert MONITOR_TYPES["pipewire-presence"] is PipewirePresenceMonitor
+
+
+def test_registered_types_implement_device_monitor():
+    for monitor_cls in MONITOR_TYPES.values():
+        assert issubclass(monitor_cls, DeviceMonitor)
+
+
+def test_device_monitor_is_abstract():
+    import pytest
+
+    with pytest.raises(TypeError):
+        DeviceMonitor()
