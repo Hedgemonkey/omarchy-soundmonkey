@@ -274,6 +274,18 @@ def test_build_status_priority_order_defaults_to_monitor_keys_without_one():
     assert status["priority_order"] == ["CETRA"]
 
 
+def test_build_status_includes_enabled_devices():
+    monitors = {"CETRA": FakeMonitor(True)}
+    status = daemon.build_status(monitors, "CETRA", enabled_devices={"CETRA": False})
+    assert status["enabled_devices"] == {"CETRA": False}
+
+
+def test_build_status_enabled_devices_defaults_to_empty_dict():
+    monitors = {"CETRA": FakeMonitor(True)}
+    status = daemon.build_status(monitors, "CETRA")
+    assert status["enabled_devices"] == {}
+
+
 def test_build_status_active_none_when_nothing_ready():
     monitors = {"CETRA": FakeMonitorWithBattery(False, battery=None)}
     status = daemon.build_status(monitors, None)

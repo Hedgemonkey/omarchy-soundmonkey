@@ -13,8 +13,10 @@ BarWidget {
   property string active: ""
   property var devices: ({})
   property var priorityOrder: []
+  property var enabledDevices: ({})
   property bool fallbackEnabled: true
   property string error: ""
+  property bool reorderBusy: false
 
   // Device display labels and ordering come from the daemon's status JSON
   // (itself driven by config.yml's `name:` per device, and the resolved
@@ -68,6 +70,7 @@ BarWidget {
     root.active = parsed.active || ""
     root.devices = parsed.devices || {}
     root.priorityOrder = parsed.priority_order || []
+    root.enabledDevices = parsed.enabled_devices || {}
     root.fallbackEnabled = parsed.fallback_enabled !== undefined ? !!parsed.fallback_enabled : true
     root.error = parsed.error || ""
   }
@@ -78,16 +81,51 @@ BarWidget {
     statusProcess.running = true
   }
 
-  function setFallbackEnabled(value) {
+  function isDeviceEnabled(deviceId) {
+    // A device the user has never touched in the panel is absent from
+    // enabledDevices, not false - matches decide_choice()'s own default.
+    return root.enabledDevices[deviceId] !== false
+  }
+
+  function persistSettings(patch) {
     if (!root.bar || !root.bar.shell) return
-    root.fallbackBusy = true
     // Persisted the same way every first-party panel persists its own
     // settings: merged into this plugin's own shell.json entry, hot-reloaded
-    // shell-side, and read directly by the daemon on its next poll - no
-    // IPC round trip or sidecar settings file needed.
-    root.bar.shell.updateEntryInline(root.moduleName, { settings: { fallbackEnabled: value } })
+    // shell-side, and read directly by the daemon on its next poll - no IPC
+    // round trip or sidecar settings file needed. Always sends the complete
+    // current object for whichever keys it touches (not a sparse diff), so
+    // there's no ambiguity about whether the shell deep-merges nested values.
+    root.bar.shell.updateEntryInline(root.moduleName, { settings: patch })
+  }
+
+  function setFallbackEnabled(value) {
+    root.fallbackBusy = true
+    persistSettings({ fallbackEnabled: value })
     root.fallbackEnabled = value
     root.fallbackBusy = false
+  }
+
+  function setDeviceEnabled(deviceId, enabled) {
+    var updated = Object.assign({}, root.enabledDevices)
+    updated[deviceId] = enabled
+    persistSettings({ enabledDevices: updated })
+    root.enabledDevices = updated
+  }
+
+  function moveDevicePriority(deviceId, direction) {
+    // direction: -1 (up / higher priority) or +1 (down / lower priority).
+    var order = root.priorityOrder.slice()
+    var index = order.indexOf(deviceId)
+    var target = index + direction
+    if (index < 0 || target < 0 || target >= order.length) return
+
+    root.reorderBusy = true
+    var swap = order[target]
+    order[target] = order[index]
+    order[index] = swap
+    persistSettings({ priorityOrder: order })
+    root.priorityOrder = order
+    root.reorderBusy = false
   }
 
   function open() {

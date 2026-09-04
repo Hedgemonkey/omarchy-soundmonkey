@@ -141,6 +141,7 @@ Panel {
             Row {
               id: deviceRow
               required property var modelData
+              required property int index
               width: parent.width
               spacing: Style.space(10)
 
@@ -153,7 +154,7 @@ Panel {
               }
 
               Column {
-                width: parent.width - Style.space(18)
+                width: parent.width - Style.space(18) - deviceControls.width - Style.space(10)
                 spacing: Style.space(2)
 
                 Text {
@@ -175,6 +176,37 @@ Panel {
                   color: Qt.darker(root.contentForeground, 1.45)
                   font.family: root.contentFontFamily
                   font.pixelSize: Style.font.caption
+                }
+              }
+
+              Row {
+                id: deviceControls
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Style.space(4)
+
+                PanelActionButton {
+                  iconText: "▲"
+                  tooltipText: "Move up in priority"
+                  foreground: root.contentForeground
+                  fontFamily: root.contentFontFamily
+                  enabled: hostWidget && !hostWidget.reorderBusy && deviceRow.index > 0
+                  onClicked: if (hostWidget) hostWidget.moveDevicePriority(deviceRow.modelData, -1)
+                }
+
+                PanelActionButton {
+                  iconText: "▼"
+                  tooltipText: "Move down in priority"
+                  foreground: root.contentForeground
+                  fontFamily: root.contentFontFamily
+                  enabled: hostWidget && !hostWidget.reorderBusy && deviceRow.index < root.deviceOrder.length - 1
+                  onClicked: if (hostWidget) hostWidget.moveDevicePriority(deviceRow.modelData, 1)
+                }
+
+                ToggleSwitch {
+                  anchors.verticalCenter: parent.verticalCenter
+                  checked: hostWidget ? hostWidget.isDeviceEnabled(deviceRow.modelData) : true
+                  foreground: root.contentForeground
+                  onToggled: if (hostWidget) hostWidget.setDeviceEnabled(deviceRow.modelData, !checked)
                 }
               }
             }

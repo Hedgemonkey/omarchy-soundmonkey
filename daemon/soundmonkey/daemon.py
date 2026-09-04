@@ -63,18 +63,22 @@ def decide_choice(monitors, priority_order, enabled_devices=None):
     return None
 
 
-def build_status(monitors, choice, cfg=None, priority_order=None, fallback_enabled=True):
+def build_status(monitors, choice, cfg=None, priority_order=None,
+                  enabled_devices=None, fallback_enabled=True):
     """Build the JSON-serialisable status dict written for the bar widget.
 
     Carries each device's display label (from config.yml's `name:`, falling
-    back to the device key) and the resolved priority_order, so the QML side
-    can render the device list - order, labels, everything - purely from
-    this payload instead of keeping its own hardcoded copy of the device
-    list (the last of the original SSoT violations: labels and order used
-    to live only in BarWidget.qml/Panel.qml, independently of config.yml).
+    back to the device key), the resolved priority_order, and the resolved
+    enabled_devices, so the QML side can render the device list - order,
+    labels, current enable state, everything - purely from this payload
+    instead of keeping its own hardcoded copy of the device list (the last
+    of the original SSoT violations: labels and order used to live only in
+    BarWidget.qml/Panel.qml, independently of config.yml) or needing to
+    parse shell.json itself just to know what it last wrote there.
 
-    cfg/priority_order default to None so existing callers (and tests) that
-    only care about connected/battery state don't need to pass them.
+    cfg/priority_order/enabled_devices default to None so existing callers
+    (and tests) that only care about connected/battery state don't need to
+    pass them.
     """
     cfg = cfg or {}
     device_cfgs = cfg.get("devices", {})
@@ -91,6 +95,7 @@ def build_status(monitors, choice, cfg=None, priority_order=None, fallback_enabl
         "active": choice,
         "fallback_enabled": fallback_enabled,
         "priority_order": priority_order or list(monitors.keys()),
+        "enabled_devices": enabled_devices if enabled_devices is not None else {},
         "devices": devices,
     }
 
@@ -202,12 +207,17 @@ def main():
 
             status = build_status(
                 monitors, choice, cfg=cfg, priority_order=priority_order,
-                fallback_enabled=fallback_enabled,
+                enabled_devices=enabled_devices, fallback_enabled=fallback_enabled,
             )
             # Write on any state change, and also periodically as a heartbeat
             # so a reader can tell "nothing changed" apart from "daemon died"
-            # by checking the file's mtime.
-            status_key = (status["devices"], status["fallback_enabled"])
+            # by checking the file's mtime. Includes priority_order/
+            # enabled_devices so a panel edit is reflected within one poll
+            # interval instead of waiting for the next heartbeat.
+            status_key = (
+                status["devices"], status["fallback_enabled"],
+                status["priority_order"], status["enabled_devices"],
+            )
             if status_key != last_status or (now - last_status_write) >= status_heartbeat_s:
                 write_status_file(status)
                 last_status = status_key
