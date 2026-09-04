@@ -4,9 +4,7 @@ import os
 import json
 import yaml
 
-from .monitors.cetra_hid import CetraHidMonitor
-from .monitors.pipewire import PipewirePresenceMonitor
-from .monitors.headsetcontrol import HeadsetControlMonitor
+from .monitors import MONITOR_TYPES
 from .sink_manager import SinkManager
 
 STATUS_PATH = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "headset-status.json")
@@ -16,27 +14,30 @@ SETTINGS_PATH = os.path.expanduser("~/.config/audio-priority-daemon/settings.jso
 def build_monitors(cfg):
     """Construct a monitor for each device declared in config.
 
-    Each headset uses a different detection mechanism, so the monitor class
-    is chosen by device name. Only devices that appear in the config are
-    started.
+    Each device names a `type` (a key in monitors.MONITOR_TYPES) and an
+    optional `monitor:` dict of kwargs passed straight to that monitor
+    class's constructor - kept separate from `sink_match`/`source_match`,
+    which are routing config apply_choice()/SinkManager use, not monitor
+    construction. Adding a device that fits an existing type is a config-
+    only change; this function never needs editing for it. A device with an
+    unknown type or invalid monitor kwargs is skipped (logged, not fatal) so
+    one bad config entry can't take down detection for every other device.
     """
     devices = cfg.get("devices", {})
     monitors = {}
 
-    if "WF1000XM5" in devices:
-        match = devices["WF1000XM5"].get("sink_match", "WF-1000XM5")
-        monitors["WF1000XM5"] = PipewirePresenceMonitor(description_match=match)
+    for name, dev_cfg in devices.items():
+        monitor_type = dev_cfg.get("type")
+        monitor_cls = MONITOR_TYPES.get(monitor_type)
+        if monitor_cls is None:
+            logging.warning(f"{name}: unknown monitor type '{monitor_type}', skipping")
+            continue
 
-    if "CETRA" in devices:
-        match = devices["CETRA"].get("sink_match", "ROG CETRA TRUE WIRELESS SPEEDNOVA")
-        monitors["CETRA"] = CetraHidMonitor(description_match=match)
-
-    if "ARCTIS" in devices:
-        # ArctisMonitor matches against the headsetcontrol device name, which
-        # differs from the PipeWire sink description. Allow an explicit
-        # "monitor_match" override, otherwise default to the product name.
-        match = devices["ARCTIS"].get("monitor_match", "Arctis Pro Wireless")
-        monitors["ARCTIS"] = HeadsetControlMonitor(description_match=match)
+        kwargs = dev_cfg.get("monitor", {})
+        try:
+            monitors[name] = monitor_cls(**kwargs)
+        except TypeError as e:
+            logging.warning(f"{name}: invalid monitor config {kwargs}: {e}")
 
     return monitors
 

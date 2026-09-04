@@ -45,11 +45,22 @@ class FakeSinkManager:
 
 CFG = {
     "devices": {
-        "WF1000XM5": {"sink_match": "WF-1000XM5", "source_match": "bluez_input"},
-        "CETRA": {"sink_match": "ROG CETRA", "source_match": "ROG CETRA Mono"},
-        "ARCTIS": {"sink_match": "Arctis Pro Wireless Analog Stereo",
-                   "source_match": "Arctis Pro Wireless Mono",
-                   "monitor_match": "Arctis Pro Wireless"},
+        "WF1000XM5": {
+            "type": "pipewire-presence",
+            "sink_match": "WF-1000XM5", "source_match": "bluez_input",
+            "monitor": {"description_match": "WF-1000XM5"},
+        },
+        "CETRA": {
+            "type": "cetra-hid",
+            "sink_match": "ROG CETRA", "source_match": "ROG CETRA Mono",
+            "monitor": {"description_match": "ROG CETRA TRUE WIRELESS SPEEDNOVA"},
+        },
+        "ARCTIS": {
+            "type": "headsetcontrol",
+            "sink_match": "Arctis Pro Wireless Analog Stereo",
+            "source_match": "Arctis Pro Wireless Mono",
+            "monitor": {"description_match": "Arctis Pro Wireless"},
+        },
     },
     "priority_order": ["WF1000XM5", "CETRA", "ARCTIS"],
     "fallback": {"mode": "system"},
@@ -65,6 +76,45 @@ def test_build_monitors_creates_all_three():
     assert isinstance(monitors["WF1000XM5"], PipewirePresenceMonitor)
     assert isinstance(monitors["CETRA"], CetraHidMonitor)
     assert isinstance(monitors["ARCTIS"], HeadsetControlMonitor)
+
+
+def test_build_monitors_adds_a_new_device_via_config_only():
+    # The whole point of the registry: a device using an *existing* monitor
+    # type needs no daemon.py change, just a config entry - proves the OCP
+    # fix actually works, not just that the old three still build.
+    cfg = {"devices": {**CFG["devices"], "COUCH_SPEAKER": {
+        "type": "pipewire-presence",
+        "sink_match": "Couch Bluetooth Speaker",
+        "monitor": {"description_match": "Couch Bluetooth Speaker"},
+    }}}
+    monitors = daemon.build_monitors(cfg)
+    from soundmonkey.monitors.pipewire import PipewirePresenceMonitor
+    assert "COUCH_SPEAKER" in monitors
+    assert isinstance(monitors["COUCH_SPEAKER"], PipewirePresenceMonitor)
+
+
+def test_build_monitors_skips_unknown_type():
+    cfg = {"devices": {"MYSTERY": {"type": "not-a-real-type", "monitor": {}}}}
+    monitors = daemon.build_monitors(cfg)
+    assert monitors == {}
+
+
+def test_build_monitors_skips_invalid_monitor_kwargs():
+    # pipewire-presence requires description_match; omitting it is a
+    # TypeError at construction time, which should be caught and skipped
+    # rather than crashing the whole daemon over one bad device entry.
+    cfg = {"devices": {"BROKEN": {"type": "pipewire-presence", "monitor": {}}}}
+    monitors = daemon.build_monitors(cfg)
+    assert monitors == {}
+
+
+def test_build_monitors_one_bad_device_does_not_block_the_others():
+    cfg = {"devices": {
+        **CFG["devices"],
+        "BROKEN": {"type": "not-a-real-type", "monitor": {}},
+    }}
+    monitors = daemon.build_monitors(cfg)
+    assert set(monitors.keys()) == {"WF1000XM5", "CETRA", "ARCTIS"}
 
 
 def test_decide_choice_picks_highest_priority_ready():

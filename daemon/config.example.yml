@@ -1,24 +1,46 @@
+# Each device declares:
+#   type:     a key in soundmonkey.monitors.MONITOR_TYPES
+#   monitor:  kwargs passed straight to that monitor class's constructor
+#   sink_match / source_match: substrings matched against PipeWire sink /
+#     source descriptions when this device is chosen - used for routing,
+#     independent of how the monitor itself detects the device
+#
+# Adding a device that fits an existing type (pipewire-presence for "just
+# needs a matching sink to exist", or headsetcontrol for any device
+# https://github.com/Sapd/HeadsetControl supports) needs no code - just a
+# new entry here. See docs/adding-a-device.md for devices that need a new
+# monitor type entirely.
 devices:
   WF1000XM5:
+    type: pipewire-presence
     sink_match: "WF-1000XM5"
     source_match: "bluez_input.AC:80:0A:29:4D:FE"
+    monitor:
+      description_match: "WF-1000XM5"
+
   CETRA:
+    type: cetra-hid
     sink_match: "ROG CETRA TRUE WIRELESS SPEEDNOVA Analog Stereo"
     source_match: "ROG CETRA TRUE WIRELESS SPEEDNOVA Mono"
+    monitor:
+      description_match: "ROG CETRA TRUE WIRELESS SPEEDNOVA"
+
   ARCTIS:
+    type: headsetcontrol
     sink_match: "Arctis Pro Wireless Analog Stereo"
     source_match: "Arctis Pro Wireless Mono"
-    # matched against the headsetcontrol device name (not the PipeWire sink)
-    monitor_match: "Arctis Pro Wireless"
+    monitor:
+      # matched against the headsetcontrol device name, not the PipeWire sink
+      description_match: "Arctis Pro Wireless"
 
 priority_order:
   - WF1000XM5
   - CETRA
   - ARCTIS
   # WF1000XM5 first: Bluetooth pairing state is inherently on/off, the most
-  # reliable signal of the three. CETRA now tracks its own session on/off
-  # state (see cetra_monitor.py) rather than just "dongle plugged in", so it
-  # can safely sit above ARCTIS again - it only defaults to "ready" when the
+  # reliable signal of the three. CETRA tracks its own session on/off state
+  # (see monitors/cetra_hid.py) rather than just "dongle plugged in", so it
+  # can safely sit above ARCTIS - it only defaults to "ready" when the
   # daemon hasn't yet observed a fresh power-off event (e.g. right after a
   # restart while already docked), which ARCTIS's headsetcontrol-based check
   # doesn't need to worry about.
@@ -27,6 +49,5 @@ fallback:
   mode: "system"
 
 poll_interval_ms: 1000
-cetra_timeout_ms: 5000
 reassert_interval_s: 30
 log_level: "INFO"
