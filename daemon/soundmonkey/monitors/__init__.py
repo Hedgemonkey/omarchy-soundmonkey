@@ -1,5 +1,6 @@
 from .base import DeviceMonitor
 from .pipewire import PipewirePresenceMonitor
+from .headsetcontrol import HeadsetControlMonitor
 
 # Maps a config.yml device's `type:` string to the monitor class that
 # implements it. daemon.py's build_monitors() looks devices up here instead
@@ -10,6 +11,12 @@ from .pipewire import PipewirePresenceMonitor
 # here; nothing else in the daemon changes.
 MONITOR_TYPES = {
     "pipewire-presence": PipewirePresenceMonitor,
+    "headsetcontrol": HeadsetControlMonitor,
 }
 
-__all__ = ["DeviceMonitor", "MONITOR_TYPES", "PipewirePresenceMonitor"]
+__all__ = [
+    "DeviceMonitor",
+    "MONITOR_TYPES",
+    "PipewirePresenceMonitor",
+    "HeadsetControlMonitor",
+]

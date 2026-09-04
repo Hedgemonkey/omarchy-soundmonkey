@@ -1,9 +1,14 @@
 from soundmonkey.monitors import DeviceMonitor, MONITOR_TYPES
 from soundmonkey.monitors.pipewire import PipewirePresenceMonitor
+from soundmonkey.monitors.headsetcontrol import HeadsetControlMonitor
 
 
 def test_pipewire_presence_registered():
     assert MONITOR_TYPES["pipewire-presence"] is PipewirePresenceMonitor
+
+
+def test_headsetcontrol_registered():
+    assert MONITOR_TYPES["headsetcontrol"] is HeadsetControlMonitor
 
 
 def test_registered_types_implement_device_monitor():

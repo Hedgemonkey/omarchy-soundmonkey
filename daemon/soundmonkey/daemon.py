@@ -6,7 +6,7 @@ import yaml
 
 from .monitors.cetra_monitor import CetraMonitor
 from .monitors.pipewire import PipewirePresenceMonitor
-from .monitors.arctis_monitor import ArctisMonitor
+from .monitors.headsetcontrol import HeadsetControlMonitor
 from .sink_manager import SinkManager
 
 STATUS_PATH = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "headset-status.json")
@@ -36,7 +36,7 @@ def build_monitors(cfg):
         # differs from the PipeWire sink description. Allow an explicit
         # "monitor_match" override, otherwise default to the product name.
         match = devices["ARCTIS"].get("monitor_match", "Arctis Pro Wireless")
-        monitors["ARCTIS"] = ArctisMonitor(description_match=match)
+        monitors["ARCTIS"] = HeadsetControlMonitor(description_match=match)
 
     return monitors
 

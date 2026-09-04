@@ -61,10 +61,10 @@ def test_build_monitors_creates_all_three():
     assert set(monitors.keys()) == {"WF1000XM5", "CETRA", "ARCTIS"}
     from soundmonkey.monitors.pipewire import PipewirePresenceMonitor
     from soundmonkey.monitors.cetra_monitor import CetraMonitor
-    from soundmonkey.monitors.arctis_monitor import ArctisMonitor
+    from soundmonkey.monitors.headsetcontrol import HeadsetControlMonitor
     assert isinstance(monitors["WF1000XM5"], PipewirePresenceMonitor)
     assert isinstance(monitors["CETRA"], CetraMonitor)
-    assert isinstance(monitors["ARCTIS"], ArctisMonitor)
+    assert isinstance(monitors["ARCTIS"], HeadsetControlMonitor)
 
 
 def test_decide_choice_picks_highest_priority_ready():
