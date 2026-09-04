@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from soundmonkey.monitors.cetra_monitor import CetraMonitor
+from soundmonkey.monitors.cetra_hid import CetraHidMonitor
 
 
 def _pw_payload(nodes):
@@ -26,9 +26,8 @@ def test_sink_present_reports_ready(monkeypatch):
     _patch_pw_dump(monkeypatch, [
         _make_sink(99, "ROG CETRA TRUE WIRELESS SPEEDNOVA Analog Stereo"),
     ])
-    m = CetraMonitor()
-    # Run one check cycle
-    connected = m._check_pw()
+    m = CetraHidMonitor()
+    connected = m._pw_monitor.check_once()
     assert connected is True
 
 
@@ -36,32 +35,8 @@ def test_sink_absent_reports_not_ready(monkeypatch):
     _patch_pw_dump(monkeypatch, [
         _make_sink(1, "Some Other Device"),
     ])
-    m = CetraMonitor()
-    connected = m._check_pw()
-    assert connected is False
-
-
-def test_empty_pw_dump_reports_not_ready(monkeypatch):
-    _patch_pw_dump(monkeypatch, [])
-    m = CetraMonitor()
-    connected = m._check_pw()
-    assert connected is False
-
-
-def test_timeout_reports_not_ready(monkeypatch):
-    def raise_timeout(cmd, **kw):
-        raise subprocess.TimeoutExpired(cmd, 5)
-
-    monkeypatch.setattr(subprocess, "check_output", raise_timeout)
-    m = CetraMonitor()
-    connected = m._check_pw()
-    assert connected is False
-
-
-def test_malformed_json_reports_not_ready(monkeypatch):
-    monkeypatch.setattr(subprocess, "check_output", lambda cmd, **kw: b"not json")
-    m = CetraMonitor()
-    connected = m._check_pw()
+    m = CetraHidMonitor()
+    connected = m._pw_monitor.check_once()
     assert connected is False
 
 
@@ -70,34 +45,33 @@ def test_custom_description_match(monkeypatch):
         _make_sink(1, "Some Other Device"),
         _make_sink(2, "ROG CETRA TRUE WIRELESS SPEEDNOVA Analog Stereo"),
     ])
-    m = CetraMonitor(description_match="ROG CETRA")
-    connected = m._check_pw()
+    m = CetraHidMonitor(description_match="ROG CETRA")
+    connected = m._pw_monitor.check_once()
     assert connected is True
 
 
-def test_is_audio_ready_reflects_state(monkeypatch):
+def test_is_audio_ready_reflects_pw_state(monkeypatch):
     _patch_pw_dump(monkeypatch, [
         _make_sink(99, "ROG CETRA TRUE WIRELESS SPEEDNOVA Analog Stereo"),
     ])
-    m = CetraMonitor()
+    m = CetraHidMonitor()
     # Initially False before first check
     assert m.is_audio_ready() is False
-    m._check_pw()
+    m._pw_monitor.check_once()
     assert m.is_audio_ready() is True
 
 
-def test_is_audio_ready_updates_to_false(monkeypatch):
-    m = CetraMonitor()
-    m._connected = True
+def test_is_audio_ready_updates_to_false_when_sink_disappears(monkeypatch):
+    m = CetraHidMonitor()
+    m._pw_monitor._connected = True
     assert m.is_audio_ready() is True
-    # Now simulate sink disappearing
     _patch_pw_dump(monkeypatch, [])
-    m._check_pw()
+    m._pw_monitor.check_once()
     assert m.is_audio_ready() is False
 
 
 def test_battery_report_updates_state():
-    m = CetraMonitor()
+    m = CetraHidMonitor()
     data = bytes([0xcc, 0x12, 0x09, 0x00, 0x00, 100, 100, 50] + [0] * 56)
     handled = m._process_report(data)
     assert handled is True
@@ -107,7 +81,7 @@ def test_battery_report_updates_state():
 def test_non_battery_vendor_report_ignored():
     # Same report ID but a different subtype (e.g. the identity/connect blob)
     data = bytes([0xcc, 0x71, 0x02] + [0] * 61)
-    m = CetraMonitor()
+    m = CetraHidMonitor()
     handled = m._process_report(data)
     assert handled is False
     assert m.get_battery() is None
@@ -116,14 +90,14 @@ def test_non_battery_vendor_report_ignored():
 def test_short_report_ignored():
     # Consumer-control reports (report ID 12) are only 2 bytes
     data = bytes([0x0c, 0x08])
-    m = CetraMonitor()
+    m = CetraHidMonitor()
     handled = m._process_report(data)
     assert handled is False
     assert m.get_battery() is None
 
 
 def test_battery_persists_until_next_report():
-    m = CetraMonitor()
+    m = CetraHidMonitor()
     m._process_report(bytes([0xcc, 0x12, 0x09, 0x00, 0x00, 80, 90, 40] + [0] * 56))
     assert m.get_battery() == {"left": 80, "right": 90, "case": 40}
     m._process_report(bytes([0xcc, 0x71, 0x02] + [0] * 61))
@@ -137,14 +111,14 @@ def test_session_defaults_active_before_any_report(monkeypatch):
     _patch_pw_dump(monkeypatch, [
         _make_sink(99, "ROG CETRA TRUE WIRELESS SPEEDNOVA Analog Stereo"),
     ])
-    m = CetraMonitor()
-    m._check_pw()
+    m = CetraHidMonitor()
+    m._pw_monitor.check_once()
     assert m.is_audio_ready() is True
 
 
 def test_power_off_report_clears_session_active():
-    m = CetraMonitor()
-    m._connected = True
+    m = CetraHidMonitor()
+    m._pw_monitor._connected = True
     assert m.is_audio_ready() is True
     handled = m._process_report(bytes([0xcc, 0x12, 0x01, 0x00, 0x00, 0x00, 0x00] + [0] * 57))
     assert handled is True
@@ -152,8 +126,8 @@ def test_power_off_report_clears_session_active():
 
 
 def test_connect_report_sets_session_active():
-    m = CetraMonitor()
-    m._connected = True
+    m = CetraHidMonitor()
+    m._pw_monitor._connected = True
     m._session_active = False
     m._process_report(bytes([0xcc, 0x12, 0x01, 0x00, 0x00, 0x11, 0x00] + [0] * 57))
     assert m.is_audio_ready() is True
@@ -166,11 +140,31 @@ def test_is_audio_ready_false_when_docked_even_if_sink_present(monkeypatch):
     _patch_pw_dump(monkeypatch, [
         _make_sink(99, "ROG CETRA TRUE WIRELESS SPEEDNOVA Analog Stereo"),
     ])
-    m = CetraMonitor()
-    m._check_pw()
+    m = CetraHidMonitor()
+    m._pw_monitor.check_once()
     assert m.is_audio_ready() is True
     m._process_report(bytes([0xcc, 0x12, 0x01, 0x00, 0x00, 0x00, 0x00] + [0] * 57))
     assert m.is_audio_ready() is False
     # Sink is still there (dongle still plugged in) - confirms it's the
     # session flag, not the pw check, that changed.
-    assert m._connected is True
+    assert m._pw_monitor.is_audio_ready() is True
+
+
+def test_start_starts_both_pw_monitor_and_hid_thread(monkeypatch):
+    pw_started = []
+    hid_started = []
+    m = CetraHidMonitor()
+    monkeypatch.setattr(m._pw_monitor, "start", lambda: pw_started.append(True))
+    monkeypatch.setattr(m._hid_thread, "start", lambda: hid_started.append(True))
+    m.start()
+    assert pw_started == [True]
+    assert hid_started == [True]
+
+
+def test_stop_stops_both_pw_monitor_and_hid_loop(monkeypatch):
+    pw_stopped = []
+    m = CetraHidMonitor()
+    monkeypatch.setattr(m._pw_monitor, "stop", lambda: pw_stopped.append(True))
+    m.stop()
+    assert pw_stopped == [True]
+    assert m._stop_event.is_set() is True

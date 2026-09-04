@@ -60,10 +60,10 @@ def test_build_monitors_creates_all_three():
     monitors = daemon.build_monitors(CFG)
     assert set(monitors.keys()) == {"WF1000XM5", "CETRA", "ARCTIS"}
     from soundmonkey.monitors.pipewire import PipewirePresenceMonitor
-    from soundmonkey.monitors.cetra_monitor import CetraMonitor
+    from soundmonkey.monitors.cetra_hid import CetraHidMonitor
     from soundmonkey.monitors.headsetcontrol import HeadsetControlMonitor
     assert isinstance(monitors["WF1000XM5"], PipewirePresenceMonitor)
-    assert isinstance(monitors["CETRA"], CetraMonitor)
+    assert isinstance(monitors["CETRA"], CetraHidMonitor)
     assert isinstance(monitors["ARCTIS"], HeadsetControlMonitor)
 
 

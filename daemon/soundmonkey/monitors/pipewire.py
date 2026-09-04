@@ -7,7 +7,7 @@ import logging
 from .base import DeviceMonitor
 
 
-class PipewirePresenceMonitor(DeviceMonitor, threading.Thread):
+class PipewirePresenceMonitor(threading.Thread, DeviceMonitor):
     """Reports a device ready whenever a PipeWire sink whose description
     contains `description_match` exists in the audio graph.
 

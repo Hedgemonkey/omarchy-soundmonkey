@@ -34,7 +34,7 @@ def _is_connected(device):
     return not any(marker in battery_error for marker in _OFFLINE_ERROR_MARKERS)
 
 
-class HeadsetControlMonitor(DeviceMonitor, threading.Thread):
+class HeadsetControlMonitor(threading.Thread, DeviceMonitor):
     """Monitors any device supported by the `headsetcontrol` CLI.
 
     headsetcontrol (https://github.com/Sapd/HeadsetControl) supports dozens

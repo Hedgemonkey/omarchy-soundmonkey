@@ -5,14 +5,24 @@ class DeviceMonitor(ABC):
     """Common interface every device monitor implements.
 
     daemon.py only ever talks to this interface - it never needs to know
-    which detection mechanism (PipeWire presence, headsetcontrol, raw HID)
-    a given device uses. Concrete monitors also subclass threading.Thread
-    for start()/run(), which this ABC deliberately doesn't redeclare.
+    which detection mechanism (PipeWire presence, headsetcontrol, raw HID) a
+    given device uses, or how many background threads (zero, one, or several
+    composed sub-monitors) it takes to implement one. Most concrete monitors
+    subclass threading.Thread and get start() for free; a composite monitor
+    that owns other monitors instead of polling anything itself (see
+    CetraHidMonitor) implements start()/stop() directly to fan out to its
+    children.
     """
 
     @abstractmethod
+    def start(self):
+        """Begin monitoring (idempotent-per-instance, not expected to be
+        called twice)."""
+
+    @abstractmethod
     def stop(self):
-        """Signal the monitor's background thread to stop."""
+        """Stop monitoring - the background thread(s) this owns, and any
+        composed sub-monitors."""
 
     @abstractmethod
     def is_audio_ready(self) -> bool:

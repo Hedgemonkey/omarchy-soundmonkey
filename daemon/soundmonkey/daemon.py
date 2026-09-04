@@ -4,7 +4,7 @@ import os
 import json
 import yaml
 
-from .monitors.cetra_monitor import CetraMonitor
+from .monitors.cetra_hid import CetraHidMonitor
 from .monitors.pipewire import PipewirePresenceMonitor
 from .monitors.headsetcontrol import HeadsetControlMonitor
 from .sink_manager import SinkManager
@@ -29,7 +29,7 @@ def build_monitors(cfg):
 
     if "CETRA" in devices:
         match = devices["CETRA"].get("sink_match", "ROG CETRA TRUE WIRELESS SPEEDNOVA")
-        monitors["CETRA"] = CetraMonitor(description_match=match)
+        monitors["CETRA"] = CetraHidMonitor(description_match=match)
 
     if "ARCTIS" in devices:
         # ArctisMonitor matches against the headsetcontrol device name, which
