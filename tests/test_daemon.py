@@ -302,6 +302,41 @@ def test_build_status_reports_fallback_disabled():
     assert status["fallback_enabled"] is False
 
 
+def test_debouncer_confirms_choice_once_stable_period_elapses():
+    d = daemon.ChoiceDebouncer(stable_s=2.0)
+    assert d.update("CETRA", now=0.0) is None
+    assert d.update("CETRA", now=1.0) is None
+    assert d.update("CETRA", now=2.0) == "CETRA"
+
+
+def test_debouncer_ignores_a_brief_flicker():
+    d = daemon.ChoiceDebouncer(stable_s=2.0)
+    assert d.update("CETRA", now=0.0) is None
+    assert d.update("CETRA", now=2.0) == "CETRA"
+    # Transport blip: reading drops out then comes straight back, both
+    # within one stable window - should never confirm the drop.
+    assert d.update(None, now=2.5) == "CETRA"
+    assert d.update("CETRA", now=2.9) == "CETRA"
+
+
+def test_debouncer_confirms_a_sustained_change_after_flicker_settles():
+    d = daemon.ChoiceDebouncer(stable_s=2.0)
+    d.update("CETRA", now=0.0)
+    d.update("CETRA", now=2.0)
+    d.update(None, now=2.5)
+    d.update("ARCTIS", now=2.7)
+    # ARCTIS itself only just started being reported; needs its own
+    # stable_s before it is confirmed.
+    assert d.update("ARCTIS", now=3.0) == "CETRA"
+    assert d.update("ARCTIS", now=4.7) == "ARCTIS"
+
+
+def test_debouncer_starts_unconfirmed_until_first_window_elapses():
+    d = daemon.ChoiceDebouncer(stable_s=2.0)
+    assert d.update(None, now=0.0) is None
+    assert d.update(None, now=1.0) is None
+
+
 def test_write_status_file_writes_valid_json(tmp_path):
     path = tmp_path / "headset-status.json"
     status = {"active": "CETRA", "devices": {}, "updated": "2026-08-30T19:00:00"}

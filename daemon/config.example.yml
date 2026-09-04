@@ -55,4 +55,10 @@ fallback:
 
 poll_interval_ms: 1000
 reassert_interval_s: 30
+# A device's readiness must hold steady for this long before the daemon
+# switches to (or away from) it. Absorbs Bluetooth transport flaps - a
+# half-second disconnect/reconnect blip that would otherwise trigger a
+# switch, revert, and re-switch in quick succession, which has reliably
+# crashed Discord's WebRTC audio thread when it lands mid-flap.
+debounce_s: 2.0
 log_level: "INFO"

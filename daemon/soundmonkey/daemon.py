@@ -63,6 +63,36 @@ def decide_choice(monitors, priority_order, enabled_devices=None):
     return None
 
 
+class ChoiceDebouncer:
+    """Only confirms a decide_choice() result once it has held steady.
+
+    A flapping Bluetooth transport (mid-disconnect/reconnect) can make a
+    monitor's readiness flicker several times a second. Applying every one
+    of those flickers means WirePlumber relinks live audio streams (e.g.
+    Discord's WebRTC voice engine) back-to-back while the underlying device
+    is genuinely erroring out, which has reliably aborted Discord's audio
+    thread. Requiring the raw choice to be stable for `stable_s` before it
+    is acted on absorbs the flicker while still switching promptly on a
+    real, sustained change (headset powered off, battery died, etc).
+    """
+
+    _UNSET = object()
+
+    def __init__(self, stable_s):
+        self.stable_s = stable_s
+        self._pending = self._UNSET
+        self._pending_since = None
+        self._confirmed = None
+
+    def update(self, raw_choice, now):
+        if raw_choice != self._pending:
+            self._pending = raw_choice
+            self._pending_since = now
+        if now - self._pending_since >= self.stable_s:
+            self._confirmed = self._pending
+        return self._confirmed
+
+
 def build_status(monitors, choice, cfg=None, priority_order=None,
                   enabled_devices=None, fallback_enabled=True):
     """Build the JSON-serialisable status dict written for the bar widget.
@@ -169,6 +199,7 @@ def main():
 
     headset_sink_substrings = [d.get("sink_match") for d in devices.values()]
     sinks = SinkManager(headset_sink_substrings=headset_sink_substrings)
+    debouncer = ChoiceDebouncer(cfg.get("debounce_s", 2.0))
     last_choice = None
     last_apply = 0.0
     last_status = None
@@ -185,8 +216,9 @@ def main():
             enabled_devices = resolved["enabledDevices"]
             fallback_enabled = resolved["fallbackEnabled"]
 
-            choice = decide_choice(monitors, priority_order, enabled_devices)
             now = time.time()
+            raw_choice = decide_choice(monitors, priority_order, enabled_devices)
+            choice = debouncer.update(raw_choice, now)
             # Apply when the choice changes, or periodically to re-assert in
             # case an external component (e.g. WirePlumber) moved the default.
             # Skip the reassert entirely while fallback is disabled and no
