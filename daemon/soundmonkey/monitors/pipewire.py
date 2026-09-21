@@ -26,12 +26,19 @@ class PipewirePresenceMonitor(threading.Thread, DeviceMonitor):
     their own "is the dongle present" building block instead of duplicating
     the pw-dump polling loop.
 
-    `mac_address` is optional: when given, each poll also asks BlueZ (via
-    `bluetoothctl info`) for the device's battery percentage, for any
-    Bluetooth device that exposes one - no vendor-specific protocol work
-    needed. Omit it for USB devices or Bluetooth devices with no battery
-    reporting; `get_battery()` then stays unsupported (returns None), same
-    as before this was added.
+    Bluetooth battery reporting needs no config at all: a Bluetooth sink's
+    PipeWire node already carries its own MAC in the `api.bluez5.address`
+    prop (confirmed via `pw-dump` against the WF-1000XM5 - every profile of
+    a bluez5 sink node has it), so once a poll matches the sink, that address
+    is reused to ask BlueZ (via `bluetoothctl info`) for battery percentage,
+    for any Bluetooth device that reports one - no vendor-specific protocol
+    work, no MAC to look up and paste into config.yml by hand. `mac_address`
+    is an optional escape hatch (a device whose matched node somehow lacks
+    the prop, or polling a different node's address than the one that
+    matches `description_match`) - most devices never need it. A USB device,
+    or a Bluetooth device with no battery reporting, just never gets a
+    detected address, and `get_battery()` stays unsupported (returns None),
+    same as before this was added.
     """
 
     def __init__(self, description_match, poll_interval_s=2.0, mac_address=None):
@@ -41,6 +48,7 @@ class PipewirePresenceMonitor(threading.Thread, DeviceMonitor):
         self.mac_address = mac_address
         self._connected = False
         self._battery = None
+        self._detected_mac_address = None
         self._lock = threading.Lock()
         self._stop_event = threading.Event()
 
@@ -57,23 +65,33 @@ class PipewirePresenceMonitor(threading.Thread, DeviceMonitor):
                 timeout=2.0,
             )
             nodes = json.loads(out)
-            found = self._matches(nodes)
+            matched_props = self._matches(nodes)
         except subprocess.TimeoutExpired:
             logging.warning(f"{self.description_match}: pw-dump timeout")
-            found = False
+            matched_props = None
         except Exception as e:
             logging.warning(f"{self.description_match}: pw-dump error: {e}")
-            found = False
+            matched_props = None
+
+        found = matched_props is not None
+        if found:
+            detected = matched_props.get("api.bluez5.address")
+            if detected:
+                self._detected_mac_address = detected
 
         with self._lock:
             self._connected = found
 
-        if self.mac_address:
-            self._check_battery()
+        # Persist the detected address across polls (it never changes for a
+        # given physical device) so a momentary sink disappearance doesn't
+        # also blank out the battery reading.
+        mac_address = self.mac_address or self._detected_mac_address
+        if mac_address:
+            self._check_battery(mac_address)
 
         return found
 
-    def _check_battery(self):
+    def _check_battery(self, mac_address):
         """Poll BlueZ for the device's battery percentage, if it reports one.
 
         Independent of the pw-dump presence check above: a device can be
@@ -86,7 +104,7 @@ class PipewirePresenceMonitor(threading.Thread, DeviceMonitor):
         battery = None
         try:
             out = subprocess.check_output(
-                ["bluetoothctl", "info", self.mac_address],
+                ["bluetoothctl", "info", mac_address],
                 stderr=subprocess.DEVNULL,
                 timeout=2.0,
             ).decode(errors="replace")
@@ -102,12 +120,13 @@ class PipewirePresenceMonitor(threading.Thread, DeviceMonitor):
             self._battery = battery
 
     def _matches(self, nodes):
+        """Return the matching sink node's props dict, or None."""
         for obj in nodes:
             props = obj.get("info", {}).get("props", {})
             if props.get("media.class") == "Audio/Sink" and \
                self.description_match in (props.get("node.description", "") or ""):
-                return True
-        return False
+                return props
+        return None
 
     def run(self):
         while not self._stop_event.is_set():

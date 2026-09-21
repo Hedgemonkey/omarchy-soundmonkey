@@ -49,21 +49,26 @@ devices:
 Check with `pw-dump | grep -i "your device"` (while it's connected) to find
 the right substring.
 
-If it's a Bluetooth device, it can still report battery level with no extra
-code: add `mac_address:` and the monitor polls BlueZ's `org.bluez.Battery1`
-(via `bluetoothctl info`) for it, same as any headset that reports battery
-over AVRCP/HFP.
+If it's a Bluetooth device, it reports battery level automatically, no
+config needed: the matched PipeWire sink node already carries its own
+`api.bluez5.address` prop, which the monitor reuses to ask BlueZ's
+`org.bluez.Battery1` (via `bluetoothctl info`) for the percentage - same
+as any headset that reports battery over AVRCP/HFP. Confirm yours does
+with `bluetoothctl info <mac>` (from `bluetoothctl devices Connected`)
+while connected - look for a `Battery Percentage:` line. If your device
+doesn't have one, `get_battery()` just stays unsupported, same as before
+this existed.
+
+If you ever need to point battery polling at a *different* address than
+the one on the matched sink (rare - e.g. a multi-node device where the
+matched sink isn't the node BlueZ tracks battery on), pass `mac_address:`
+explicitly and it takes priority over auto-detection:
 
 ```yaml
     monitor:
       description_match: "My Bluetooth Speaker"
-      mac_address: "AA:BB:CC:DD:EE:FF"   # from `bluetoothctl devices Connected`
+      mac_address: "AA:BB:CC:DD:EE:FF"
 ```
-
-Confirm your device actually exposes it first: `bluetoothctl info <mac>`
-while connected should show a `Battery Percentage:` line. If it doesn't,
-`mac_address` is harmless to leave out - `get_battery()` just stays
-unsupported, same as before.
 
 ## 3. Otherwise: reverse-engineer a new monitor type
 

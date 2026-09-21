@@ -20,10 +20,9 @@ devices:
     source_match: "bluez_input.AC:80:0A:29:4D:FE"
     monitor:
       description_match: "WF-1000XM5"
-      # optional: reports battery % via BlueZ (org.bluez.Battery1) for any
-      # Bluetooth device that supports it - find yours with
-      # `bluetoothctl devices Connected`
-      mac_address: "AC:80:0A:29:4D:FE"
+      # Battery % is reported automatically for Bluetooth devices - no MAC
+      # address to look up or paste in here. See docs/adding-a-device.md if
+      # you need to override the auto-detected address for some reason.
 
   CETRA:
     name: "ROG Cetra"
