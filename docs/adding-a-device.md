@@ -31,9 +31,9 @@ devices:
 
 ## 2. Does it just need "is a matching sink present"?
 
-Some devices (most simple Bluetooth/USB audio devices with no useful battery
-or session telemetry) are adequately detected by "does a PipeWire sink with
-this description exist right now" - the device shows up when active, and
+Some devices (most simple Bluetooth/USB audio devices with no useful session
+telemetry) are adequately detected by "does a PipeWire sink with this
+description exist right now" - the device shows up when active, and
 disappears when not. Use `type: pipewire-presence`:
 
 ```yaml
@@ -48,6 +48,22 @@ devices:
 
 Check with `pw-dump | grep -i "your device"` (while it's connected) to find
 the right substring.
+
+If it's a Bluetooth device, it can still report battery level with no extra
+code: add `mac_address:` and the monitor polls BlueZ's `org.bluez.Battery1`
+(via `bluetoothctl info`) for it, same as any headset that reports battery
+over AVRCP/HFP.
+
+```yaml
+    monitor:
+      description_match: "My Bluetooth Speaker"
+      mac_address: "AA:BB:CC:DD:EE:FF"   # from `bluetoothctl devices Connected`
+```
+
+Confirm your device actually exposes it first: `bluetoothctl info <mac>`
+while connected should show a `Battery Percentage:` line. If it doesn't,
+`mac_address` is harmless to leave out - `get_battery()` just stays
+unsupported, same as before.
 
 ## 3. Otherwise: reverse-engineer a new monitor type
 

@@ -92,3 +92,81 @@ def test_is_audio_ready_updates_to_false_when_sink_disappears(monkeypatch):
 def test_get_battery_unsupported():
     m = PipewirePresenceMonitor(description_match="WF-1000XM5")
     assert m.get_battery() is None
+
+
+def _patch_pw_and_bluetoothctl(monkeypatch, nodes, bluetoothctl_output):
+    pw_payload = _pw_payload(nodes)
+
+    def fake_check_output(cmd, **kw):
+        if cmd[0] == "bluetoothctl":
+            return bluetoothctl_output
+        return pw_payload
+
+    monkeypatch.setattr(subprocess, "check_output", fake_check_output)
+
+
+def test_get_battery_without_mac_address_never_calls_bluetoothctl(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        subprocess, "check_output",
+        lambda cmd, **kw: calls.append(cmd) or _pw_payload([_make_sink(1, "WF-1000XM5")]),
+    )
+    m = PipewirePresenceMonitor(description_match="WF-1000XM5")
+    m.check_once()
+    assert all(cmd[0] != "bluetoothctl" for cmd in calls)
+    assert m.get_battery() is None
+
+
+def test_get_battery_parses_bluetoothctl_percentage(monkeypatch):
+    _patch_pw_and_bluetoothctl(
+        monkeypatch,
+        [_make_sink(1, "WF-1000XM5")],
+        b"Battery Percentage: 0x64 (100)\n",
+    )
+    m = PipewirePresenceMonitor(
+        description_match="WF-1000XM5", mac_address="AC:80:0A:29:4D:FE",
+    )
+    m.check_once()
+    assert m.get_battery() == 100
+
+
+def test_get_battery_missing_percentage_line_is_none(monkeypatch):
+    _patch_pw_and_bluetoothctl(
+        monkeypatch,
+        [_make_sink(1, "WF-1000XM5")],
+        b"Name: WF-1000XM5\nConnected: yes\n",
+    )
+    m = PipewirePresenceMonitor(
+        description_match="WF-1000XM5", mac_address="AC:80:0A:29:4D:FE",
+    )
+    m.check_once()
+    assert m.get_battery() is None
+
+
+def test_get_battery_bluetoothctl_error_is_none(monkeypatch):
+    def fake_check_output(cmd, **kw):
+        if cmd[0] == "bluetoothctl":
+            raise subprocess.CalledProcessError(1, cmd)
+        return _pw_payload([_make_sink(1, "WF-1000XM5")])
+
+    monkeypatch.setattr(subprocess, "check_output", fake_check_output)
+    m = PipewirePresenceMonitor(
+        description_match="WF-1000XM5", mac_address="AC:80:0A:29:4D:FE",
+    )
+    m.check_once()
+    assert m.get_battery() is None
+    assert m.is_audio_ready() is True  # presence check unaffected by battery failure
+
+
+def test_get_battery_bluetoothctl_timeout_is_none(monkeypatch):
+    def fake_check_output(cmd, **kw):
+        if cmd[0] == "bluetoothctl":
+            raise subprocess.TimeoutExpired(cmd, 2)
+        return _pw_payload([_make_sink(1, "WF-1000XM5")])
+
+    monkeypatch.setattr(subprocess, "check_output", fake_check_output)
+    m = PipewirePresenceMonitor(
+        description_match="WF-1000XM5", mac_address="AC:80:0A:29:4D:FE",
+    )
+    m.check_once()
+    assert m.get_battery() is None
