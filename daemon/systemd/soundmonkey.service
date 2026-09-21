@@ -4,7 +4,7 @@ After=pipewire.service wireplumber.service
 
 [Service]
 Type=simple
-ExecStart=%h/.config/omarchy/plugins/hedgemonkey.soundmonkey/daemon/.venv/bin/python -m soundmonkey
+ExecStart=%h/.local/state/soundmonkey/venv/bin/python -m soundmonkey
 Restart=on-failure
 RestartSec=2
 

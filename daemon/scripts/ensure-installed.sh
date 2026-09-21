@@ -5,6 +5,16 @@
 # example if one doesn't exist yet, installs/updates the systemd user unit,
 # and starts it - so end-user install is genuinely just
 # `omarchy plugin add <url> --enable`, no terminal steps required.
+#
+# The venv is built OUTSIDE the plugin's own directory (via
+# UV_PROJECT_ENVIRONMENT), not at the more obvious daemon/.venv. The
+# installed plugin directory is exactly what Omarchy's shell watches for
+# live plugin reload - a venv built inside it means every install writes
+# files the watcher sees as "the plugin changed", triggering a reload that
+# recreates Service.qml, which re-runs this script, which writes to the
+# venv again, forever. Confirmed live: this produced a self-sustaining
+# reload loop that pegged the shell at ~25% CPU and made its IPC
+# unresponsive until the plugin was force-removed.
 
 set -euo pipefail
 
@@ -13,13 +23,15 @@ DAEMON_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 UNIT_SRC="$DAEMON_DIR/systemd/soundmonkey.service"
 UNIT_DST="$HOME/.config/systemd/user/soundmonkey.service"
 CONFIG_DIR="$HOME/.config/soundmonkey"
+VENV_DIR="$HOME/.local/state/soundmonkey/venv"
 
 if ! command -v uv >/dev/null 2>&1; then
   echo "ensure-installed: uv is required (https://docs.astral.sh/uv/) but was not found on PATH" >&2
   exit 1
 fi
 
-( cd "$DAEMON_DIR" && uv sync --no-dev )
+mkdir -p "$(dirname "$VENV_DIR")"
+( cd "$DAEMON_DIR" && UV_PROJECT_ENVIRONMENT="$VENV_DIR" uv sync --no-dev )
 
 mkdir -p "$CONFIG_DIR"
 if [[ ! -f "$CONFIG_DIR/config.yml" ]]; then

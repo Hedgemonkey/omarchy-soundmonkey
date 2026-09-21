@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import Quickshell.Io
 
 // Loaded once, kept alive for as long as the plugin is enabled, destroyed
@@ -17,20 +18,20 @@ QtObject {
   }
 
   Component.onDestruction: {
-    // Best-effort: Process is async, and there's no guarantee the shell
-    // waits for it, but this gives the systemd unit its best chance to be
-    // stopped and removed cleanly on disable/removal rather than left
-    // running orphaned.
-    teardownProcess.running = true
+    // Best-effort: Quickshell.execDetached() is a global function, not a
+    // property on a child object - unlike the previous version of this
+    // (a declared `property Process teardownProcess`), it doesn't need
+    // this object's own properties to still be valid mid-destruction.
+    // Referencing a child Process property here threw "Value is null and
+    // could not be converted to an object" in practice: QML tears down
+    // child objects before (or concurrently with) running a parent's
+    // Component.onDestruction, so `teardownProcess` could already be gone.
+    Quickshell.execDetached([root.scriptPath("teardown.sh")])
   }
 
   property Process installProcess: Process {
     command: [root.scriptPath("ensure-installed.sh")]
     stdout: SplitParser { onRead: function(line) { console.log("soundmonkey install: " + line) } }
     stderr: SplitParser { onRead: function(line) { console.warn("soundmonkey install: " + line) } }
-  }
-
-  property Process teardownProcess: Process {
-    command: [root.scriptPath("teardown.sh")]
   }
 }
