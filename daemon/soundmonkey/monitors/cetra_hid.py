@@ -58,11 +58,16 @@ class CetraHidMonitor(DeviceMonitor):
         self.description_match = description_match
         self._pw_monitor = PipewirePresenceMonitor(description_match=description_match)
         self._battery = None
-        # Optimistic default: if the daemon starts (or restarts) while the
-        # earbuds are already out and in use, there's no fresh connect event
-        # to observe, so assume a session is active until an explicit
-        # power-off report (subtype 0x01, state byte 0x00) says otherwise.
-        self._session_active = True
+        # Default to inactive until an explicit connect report (subtype
+        # 0x01, nonzero state byte) is observed. Previously defaulted to
+        # active to cover a daemon (re)start while the earbuds were already
+        # out - but that meant a device that, for whatever reason, never
+        # gets detected properly would sit there falsely reporting "ready"
+        # instead of visibly needing attention. Detection has proven
+        # reliable enough that this false-positive risk isn't worth it
+        # anymore; the fix for a genuine miss is a normal case-out/case-in
+        # cycle, which reliably fires this same connect report.
+        self._session_active = False
         self._lock = threading.Lock()
         self._stop_event = threading.Event()
         self._hid_thread = threading.Thread(target=self._hid_loop, daemon=True)

@@ -55,6 +55,7 @@ def test_is_audio_ready_reflects_pw_state(monkeypatch):
         _make_sink(99, "ROG CETRA TRUE WIRELESS SPEEDNOVA Analog Stereo"),
     ])
     m = CetraHidMonitor()
+    m._session_active = True  # isolate the pw-state check from session tracking
     # Initially False before first check
     assert m.is_audio_ready() is False
     m._pw_monitor.check_once()
@@ -63,6 +64,7 @@ def test_is_audio_ready_reflects_pw_state(monkeypatch):
 
 def test_is_audio_ready_updates_to_false_when_sink_disappears(monkeypatch):
     m = CetraHidMonitor()
+    m._session_active = True  # isolate the pw-state check from session tracking
     m._pw_monitor._connected = True
     assert m.is_audio_ready() is True
     _patch_pw_dump(monkeypatch, [])
@@ -104,21 +106,24 @@ def test_battery_persists_until_next_report():
     assert m.get_battery() == {"left": 80, "right": 90, "case": 40}
 
 
-def test_session_defaults_active_before_any_report(monkeypatch):
-    # No HID event has been seen yet (e.g. daemon just started while the
-    # earbuds were already out and in use) - assume active until told
-    # otherwise, so a fresh start doesn't wrongly report "not ready".
+def test_session_defaults_inactive_before_any_report(monkeypatch):
+    # No HID connect report has been seen yet (e.g. daemon just started).
+    # Even with the dongle's sink present, is_audio_ready() should stay
+    # False until an explicit connect report confirms a session - a device
+    # that never gets detected should visibly need attention (a case-out/
+    # case-in cycle), not silently report ready by default.
     _patch_pw_dump(monkeypatch, [
         _make_sink(99, "ROG CETRA TRUE WIRELESS SPEEDNOVA Analog Stereo"),
     ])
     m = CetraHidMonitor()
     m._pw_monitor.check_once()
-    assert m.is_audio_ready() is True
+    assert m.is_audio_ready() is False
 
 
 def test_power_off_report_clears_session_active():
     m = CetraHidMonitor()
     m._pw_monitor._connected = True
+    m._session_active = True  # simulate an already-active session to power off
     assert m.is_audio_ready() is True
     handled = m._process_report(bytes([0xcc, 0x12, 0x01, 0x00, 0x00, 0x00, 0x00] + [0] * 57))
     assert handled is True
@@ -142,6 +147,7 @@ def test_is_audio_ready_false_when_docked_even_if_sink_present(monkeypatch):
     ])
     m = CetraHidMonitor()
     m._pw_monitor.check_once()
+    m._session_active = True  # simulate an already-active session before docking
     assert m.is_audio_ready() is True
     m._process_report(bytes([0xcc, 0x12, 0x01, 0x00, 0x00, 0x00, 0x00] + [0] * 57))
     assert m.is_audio_ready() is False
