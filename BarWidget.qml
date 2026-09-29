@@ -283,4 +283,23 @@ BarWidget {
       else if (buttonCode === Qt.MiddleButton) root.refresh(false)
     }
   }
+
+  // statusIcon is a color-emoji glyph ("🎧"/"🪫"), and color-emoji fonts
+  // render their own embedded palette regardless of the Text `color`
+  // property - so WidgetButton's active/activeColor tinting above has no
+  // visible effect on it. A small badge is the only way to actually show
+  // connected state on this icon.
+  Rectangle {
+    visible: root.anyConnected
+    width: 6
+    height: 6
+    radius: 3
+    color: root.activeBattery >= 0 && root.activeBattery <= 15 ? Color.urgent : Color.accent
+    border.width: 1
+    border.color: Color.background
+    anchors.right: button.right
+    anchors.bottom: button.bottom
+    anchors.rightMargin: 1
+    anchors.bottomMargin: 1
+  }
 }
