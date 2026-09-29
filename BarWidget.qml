@@ -34,17 +34,33 @@ BarWidget {
     return -1
   }
 
+  // Full per-device battery text: "62%" for a single-cell device, or
+  // "L 62% / R 58%, case 71%" for a left/right(/case) device - used
+  // anywhere the whole reading matters, unlike batteryFor()'s single
+  // worst-case number (which only drives the low-battery icon threshold).
+  function formatBattery(battery) {
+    if (!battery) return ""
+    if (typeof battery === "number") return battery + "%"
+    if (battery.left !== undefined && battery.right !== undefined) {
+      var text = "L " + battery.left + "% / R " + battery.right + "%"
+      if (battery.case !== undefined) text += ", case " + battery.case + "%"
+      return text
+    }
+    return ""
+  }
+
   function labelFor(deviceId) {
     var device = root.devices[deviceId]
     return device && device.label ? device.label : deviceId
   }
 
   readonly property int activeBattery: batteryFor(root.activeDevice)
+  readonly property string activeBatteryText: formatBattery(root.activeDevice && root.activeDevice.battery)
   readonly property bool anyConnected: active !== ""
 
   readonly property string statusLabel: !anyConnected
     ? "No headset active"
-    : root.activeLabel + (root.activeBattery >= 0 ? " | " + root.activeBattery + "%" : "")
+    : root.activeLabel + (root.activeBatteryText !== "" ? " | " + root.activeBatteryText : "")
 
   readonly property string statusIcon: !anyConnected ? "🎧" // headphone emoji
     : root.activeBattery >= 0 && root.activeBattery <= 15 ? "🪫" // battery-low style marker
@@ -57,12 +73,21 @@ BarWidget {
     return String(value || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
   }
 
-  function parseStatusJson(line) {
-    var text = String(line || "").trim()
-    if (text === "") return
+  // The daemon writes its own local timestamp into every status write
+  // (including plain heartbeats with no other change), so staleness -
+  // "the daemon has stopped updating this file" - is derived from that
+  // field rather than re-deriving it from the status file's own mtime via
+  // an external `stat` call the way the old soundmonkey-status shell
+  // script did.
+  readonly property int staleAfterMs: 25000
+  property double lastUpdatedMs: 0
+
+  function parseStatusJson(text) {
+    var raw = String(text || "").trim()
+    if (raw === "") return
     var parsed
     try {
-      parsed = JSON.parse(text)
+      parsed = JSON.parse(raw)
     } catch (e) {
       root.error = "Bad status output"
       return
@@ -73,12 +98,26 @@ BarWidget {
     root.enabledDevices = parsed.enabled_devices || {}
     root.fallbackEnabled = parsed.fallback_enabled !== undefined ? !!parsed.fallback_enabled : true
     root.error = parsed.error || ""
+
+    root.lastUpdatedMs = 0
+    if (parsed.updated) {
+      var parsedMs = Date.parse(parsed.updated)
+      if (!isNaN(parsedMs)) root.lastUpdatedMs = parsedMs
+    }
+    root.checkStale()
+  }
+
+  function checkStale() {
+    if (root.lastUpdatedMs === 0) return
+    if (Date.now() - root.lastUpdatedMs > root.staleAfterMs) {
+      root.error = "daemon stalled"
+      root.active = ""
+    }
   }
 
   function refresh(quiet) {
-    if (statusProcess.running) return
     if (!quiet) loading = true
-    statusProcess.running = true
+    statusFile.reload()
   }
 
   function isDeviceEnabled(deviceId) {
@@ -157,21 +196,45 @@ BarWidget {
 
   onBarChanged: injectPanel()
 
-  Process {
-    id: statusProcess
-    command: [Qt.resolvedUrl("soundmonkey-status").toString().replace("file://", ""), "status"]
-    stdout: SplitParser { onRead: function(line) { root.parseStatusJson(line) } }
-    onExited: function(exitCode) {
+  readonly property string statusFilePath: {
+    var runtimeDir = Quickshell.env("XDG_RUNTIME_DIR")
+    return (runtimeDir && runtimeDir !== "" ? runtimeDir : "/tmp") + "/soundmonkey-status.json"
+  }
+
+  // Watches the daemon's status file directly instead of spawning
+  // `soundmonkey-status status` on a fixed timer: a connect/disconnect is
+  // reflected here as soon as the daemon's next write lands (inotify-driven,
+  // typically well under a second) rather than waiting for the next poll
+  // tick, which previously added up to 5s of pure latency on top of the
+  // daemon's own detection time.
+  FileView {
+    id: statusFile
+    path: root.statusFilePath
+    watchChanges: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: {
+      root.parseStatusJson(text())
       root.loading = false
+    }
+    onLoadFailed: function(error) {
+      root.loading = false
+      root.active = ""
+      root.devices = {}
+      root.lastUpdatedMs = 0
+      root.error = "daemon not running"
     }
   }
 
   Timer {
-    interval: 5000
+    // Backstops watchChanges: guards against a lost/never-armed file watch
+    // (e.g. inotify quota exhaustion) and re-evaluates staleness even when
+    // the daemon has died outright and stopped writing entirely, neither of
+    // which would ever produce another fileChanged() on their own.
+    interval: 10000
     repeat: true
     running: true
-    triggeredOnStart: true
-    onTriggered: root.refresh(true)
+    onTriggered: statusFile.reload()
   }
 
   Loader {
@@ -210,6 +273,8 @@ BarWidget {
     bar: root.bar
     text: root.statusIcon
     dimmed: !root.anyConnected
+    active: root.anyConnected
+    activeColor: root.activeBattery >= 0 && root.activeBattery <= 15 ? Color.urgent : Color.accent
     tooltipText: root.error !== ""
       ? root.escapeMarkup(root.error)
       : root.escapeMarkup(root.statusLabel)

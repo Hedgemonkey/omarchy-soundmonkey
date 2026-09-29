@@ -50,14 +50,8 @@ Panel {
 
   function batteryText(id) {
     var info = deviceInfo(id)
-    if (!info.connected || !info.battery) return ""
-    var b = info.battery
-    if (typeof b === "number") return b + "%"
-    if (b.left !== undefined && b.right !== undefined) {
-      var caseText = b.case !== undefined ? (", case " + b.case + "%") : ""
-      return "L " + b.left + "% / R " + b.right + "%" + caseText
-    }
-    return ""
+    if (!info.connected || !hostWidget) return ""
+    return hostWidget.formatBattery(info.battery)
   }
 
   KeyboardPanel {
@@ -108,7 +102,7 @@ Panel {
 
             Text {
               width: parent.width
-              text: hostWidget && hostWidget.activeBattery >= 0 ? hostWidget.activeBattery + "% battery" : ""
+              text: hostWidget ? hostWidget.activeBatteryText : ""
               textFormat: Text.PlainText
               color: Qt.darker(root.contentForeground, 1.45)
               font.family: root.contentFontFamily
