@@ -15,14 +15,17 @@
 devices:
   WF1000XM5:
     name: "Sony WF-1000XM5"
-    type: pipewire-presence
+    type: sony-rfcomm
     sink_match: "WF-1000XM5"
     source_match: "bluez_input.AC:80:0A:29:4D:FE"
     monitor:
       description_match: "WF-1000XM5"
-      # Battery % is reported automatically for Bluetooth devices - no MAC
-      # address to look up or paste in here. See docs/adding-a-device.md if
-      # you need to override the auto-detected address for some reason.
+      # Left/right/case battery, read over Sony's own proprietary RFCOMM
+      # channel (classic Bluetooth, same bond as audio - no LE needed).
+      # mac_address is required here (unlike pipewire-presence, which
+      # auto-detects it from the matched sink): RFCOMM needs a BD address to
+      # connect to before any sink necessarily exists.
+      mac_address: "AC:80:0A:29:4D:FE"
 
   CETRA:
     name: "ROG Cetra"

@@ -2,6 +2,7 @@ from .base import DeviceMonitor
 from .pipewire import PipewirePresenceMonitor
 from .headsetcontrol import HeadsetControlMonitor
 from .cetra_hid import CetraHidMonitor
+from .sony_rfcomm import SonyRfcommMonitor
 
 # Maps a config.yml device's `type:` string to the monitor class that
 # implements it. daemon.py's build_monitors() looks devices up here instead
@@ -14,6 +15,7 @@ MONITOR_TYPES = {
     "pipewire-presence": PipewirePresenceMonitor,
     "headsetcontrol": HeadsetControlMonitor,
     "cetra-hid": CetraHidMonitor,
+    "sony-rfcomm": SonyRfcommMonitor,
 }
 
 __all__ = [
@@ -22,4 +24,5 @@ __all__ = [
     "PipewirePresenceMonitor",
     "HeadsetControlMonitor",
     "CetraHidMonitor",
+    "SonyRfcommMonitor",
 ]

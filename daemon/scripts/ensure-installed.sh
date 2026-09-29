@@ -31,7 +31,11 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 
 mkdir -p "$(dirname "$VENV_DIR")"
-( cd "$DAEMON_DIR" && UV_PROJECT_ENVIRONMENT="$VENV_DIR" uv sync --no-dev )
+# Pinned to the system interpreter rather than whatever uv would otherwise
+# resolve (mise's managed Python, first on PATH): that build lacks
+# socket.AF_BLUETOOTH (no bluetooth headers at its build time), which
+# sony_rfcomm.py needs for the Sony earbuds' RFCOMM battery protocol.
+( cd "$DAEMON_DIR" && UV_PROJECT_ENVIRONMENT="$VENV_DIR" uv sync --no-dev --python /usr/bin/python3 )
 
 mkdir -p "$CONFIG_DIR"
 if [[ ! -f "$CONFIG_DIR/config.yml" ]]; then
